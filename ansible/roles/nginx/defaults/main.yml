@@ -1,0 +1,4 @@
+---
+# Default variables for nginx role
+nginx_port: 80
+app_name: "terraform-poc"

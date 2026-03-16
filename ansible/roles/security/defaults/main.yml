@@ -1,0 +1,4 @@
+---
+# Default variables for security role
+enable_fail2ban: true
+ssh_port: 22

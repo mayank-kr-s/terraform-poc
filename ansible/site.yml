@@ -1,0 +1,20 @@
+---
+# ─────────────────────────────────────────────
+#  Main Playbook — Site Configuration
+#  Orchestrates all roles for web servers
+# ─────────────────────────────────────────────
+
+- name: Configure EC2 Web Servers
+  hosts: webservers
+  become: yes
+  gather_facts: yes
+
+  vars:
+    nginx_port: 80
+    app_name: "terraform-poc"
+    enable_fail2ban: true
+
+  roles:
+    - common       # System updates, basic packages, hostname
+    - nginx        # Nginx installation and reverse proxy config
+    - security     # OS-level security hardening

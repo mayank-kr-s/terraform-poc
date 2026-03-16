@@ -1,0 +1,173 @@
+---
+# ─────────────────────────────────────────────
+#  Security Role — OS-Level Hardening
+# ─────────────────────────────────────────────
+
+# ── SSH Hardening ──
+- name: Disable root SSH login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  notify: Restart SSH
+
+- name: Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+    state: present
+  notify: Restart SSH
+
+- name: Disable empty passwords
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitEmptyPasswords"
+    line: "PermitEmptyPasswords no"
+    state: present
+  notify: Restart SSH
+
+- name: Set SSH max authentication attempts
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?MaxAuthTries"
+    line: "MaxAuthTries 3"
+    state: present
+  notify: Restart SSH
+
+- name: Set SSH idle timeout (5 minutes)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?ClientAliveInterval"
+    line: "ClientAliveInterval 300"
+    state: present
+  notify: Restart SSH
+
+- name: Set SSH idle timeout count
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?ClientAliveCountMax"
+    line: "ClientAliveCountMax 2"
+    state: present
+  notify: Restart SSH
+
+# ── Kernel Security (sysctl) ──
+- name: Harden kernel networking parameters
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+  loop:
+    # Prevent IP spoofing
+    - { name: "net.ipv4.conf.all.rp_filter", value: "1" }
+    - { name: "net.ipv4.conf.default.rp_filter", value: "1" }
+    # Disable source routing
+    - { name: "net.ipv4.conf.all.accept_source_route", value: "0" }
+    - { name: "net.ipv4.conf.default.accept_source_route", value: "0" }
+    # Disable ICMP redirect acceptance
+    - { name: "net.ipv4.conf.all.accept_redirects", value: "0" }
+    - { name: "net.ipv4.conf.default.accept_redirects", value: "0" }
+    # Log suspicious packets
+    - { name: "net.ipv4.conf.all.log_martians", value: "1" }
+    # Ignore ICMP broadcasts
+    - { name: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+    # Enable SYN cookies (prevent SYN flood)
+    - { name: "net.ipv4.tcp_syncookies", value: "1" }
+
+# ── File Permissions ──
+- name: Set strict permissions on cron directories
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - /etc/cron.d
+    - /etc/cron.daily
+    - /etc/cron.hourly
+    - /etc/cron.monthly
+    - /etc/cron.weekly
+  ignore_errors: yes
+
+- name: Set strict permissions on SSH config
+  file:
+    path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+
+# ── Fail2Ban (Optional) ──
+- name: Install fail2ban
+  yum:
+    name: fail2ban
+    state: present
+  when: enable_fail2ban | default(true)
+  ignore_errors: yes
+  register: fail2ban_install
+
+- name: Configure fail2ban for SSH
+  copy:
+    content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/secure
+      maxretry = 5
+      bantime = 3600
+      findtime = 600
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  when: fail2ban_install is succeeded and enable_fail2ban | default(true)
+  notify: Restart Fail2Ban
+
+- name: Start fail2ban
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+  when: fail2ban_install is succeeded and enable_fail2ban | default(true)
+  ignore_errors: yes
+
+# ── Remove unnecessary packages ──
+- name: Remove unnecessary packages
+  yum:
+    name:
+      - telnet
+      - rsh
+      - rsh-server
+    state: absent
+  ignore_errors: yes
+
+# ── Password Policy ──
+- name: Set password aging (max 90 days)
+  lineinfile:
+    path: /etc/login.defs
+    regexp: "^PASS_MAX_DAYS"
+    line: "PASS_MAX_DAYS 90"
+
+- name: Set minimum password length
+  lineinfile:
+    path: /etc/login.defs
+    regexp: "^PASS_MIN_LEN"
+    line: "PASS_MIN_LEN 12"
+
+# ── Summary ──
+- name: Security hardening summary
+  debug:
+    msg: |
+      Security hardening complete:
+        ✓ SSH root login disabled
+        ✓ SSH password auth disabled
+        ✓ SSH max auth attempts: 3
+        ✓ SSH idle timeout: 5 minutes
+        ✓ Kernel networking hardened
+        ✓ File permissions tightened
+        ✓ Fail2Ban: {{ 'enabled' if (enable_fail2ban | default(true)) else 'disabled' }}
+        ✓ Unnecessary packages removed
+        ✓ Password policy enforced

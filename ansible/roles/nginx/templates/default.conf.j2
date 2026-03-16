@@ -1,0 +1,45 @@
+# Nginx site configuration — deployed by Ansible
+# {{ ansible_managed }}
+
+server {
+    listen {{ nginx_port }} default_server;
+    server_name _;
+
+    root /opt/webapp;
+    index index.html;
+
+    # Main site
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # Health check endpoint (used by ALB)
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
+    }
+
+    # Status page (for monitoring)
+    location /status {
+        stub_status on;
+        access_log off;
+        # Only allow from within VPC
+        allow 10.0.0.0/16;
+        deny all;
+    }
+
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Custom error pages
+    error_page 404 /404.html;
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}

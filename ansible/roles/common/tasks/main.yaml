@@ -1,0 +1,54 @@
+---
+# ─────────────────────────────────────────────
+#  Common Role — Base system configuration
+# ─────────────────────────────────────────────
+
+- name: Update all system packages
+  yum:
+    name: "*"
+    state: latest
+  register: update_result
+
+- name: Install essential packages
+  yum:
+    name:
+      - python3
+      - python3-pip
+      - git
+      - curl
+      - wget
+      - unzip
+      - htop
+      - vim
+      - jq
+      - tree
+    state: present
+
+- name: Set timezone
+  timezone:
+    name: "{{ server_timezone | default('UTC') }}"
+
+- name: Set hostname
+  hostname:
+    name: "{{ app_name }}-{{ inventory_hostname | regex_replace('\\.', '-') }}"
+
+- name: Ensure chrony (NTP) is running
+  service:
+    name: chronyd
+    state: started
+    enabled: yes
+
+- name: Create application user
+  user:
+    name: appuser
+    shell: /bin/bash
+    create_home: yes
+    system: no
+
+- name: Display system info
+  debug:
+    msg: |
+      Hostname: {{ ansible_hostname }}
+      OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+      IP: {{ ansible_default_ipv4.address }}
+      Packages updated: {{ update_result.changed }}

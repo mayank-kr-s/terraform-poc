@@ -1,0 +1,14 @@
+---
+# ─────────────────────────────────────────────
+#  Security Role — Handlers
+# ─────────────────────────────────────────────
+
+- name: Restart SSH
+  service:
+    name: sshd
+    state: restarted
+
+- name: Restart Fail2Ban
+  service:
+    name: fail2ban
+    state: restarted

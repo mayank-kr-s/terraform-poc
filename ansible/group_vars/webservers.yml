@@ -1,0 +1,6 @@
+---
+# Variables for webservers group
+nginx_port: 80
+app_name: "terraform-poc"
+server_timezone: "UTC"
+enable_fail2ban: true
